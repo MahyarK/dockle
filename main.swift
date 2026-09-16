@@ -10,7 +10,7 @@ let thumbMax: CGFloat = 260   // longest thumbnail side, in points
 let hoverDelay = 0.15         // seconds a Dock icon must be hovered before capturing
 let gap: CGFloat = 8
 
-struct Thumb { let id: CGWindowID; let title: String; let image: CGImage }
+struct Thumb { let id: CGWindowID; let title: String; let image: CGImage; let size: NSSize }   // size in points
 struct DockHit { let url: URL; let rect: CGRect }   // rect in Cocoa (bottom-left origin) coordinates
 
 // MARK: - Accessibility helpers
@@ -59,24 +59,26 @@ func raiseWindow(pid: pid_t, windowID: CGWindowID) {
 
 // MARK: - Capture
 
-func capture(pid: pid_t) async -> [Thumb] {
+/// Windows of every process in `pids` (Wine and some PWAs spread one Dock icon over several processes).
+func capture(pids: Set<pid_t>) async -> [Thumb] {
     guard let content = try? await SCShareableContent.excludingDesktopWindows(true, onScreenWindowsOnly: false) else { return [] }
     let windows = content.windows.filter {
-        $0.owningApplication?.processID == pid && $0.windowLayer == 0
+        pids.contains($0.owningApplication?.processID ?? -1) && $0.windowLayer == 0
             && $0.frame.width > 64 && $0.frame.height > 64
             && ($0.isOnScreen || !($0.title ?? "").isEmpty)   // off-screen untitled windows are helper junk
     }
     var thumbs: [Thumb] = []
     for w in windows {
         let cfg = SCStreamConfiguration()
-        let scale = min(1, thumbMax / max(w.frame.width, w.frame.height)) * 2   // 2x for retina
-        cfg.width = Int(w.frame.width * scale)
-        cfg.height = Int(w.frame.height * scale)
+        let scale = min(1, thumbMax / max(w.frame.width, w.frame.height))
+        cfg.width = Int(w.frame.width * scale * 2)   // 2x for retina
+        cfg.height = Int(w.frame.height * scale * 2)
         cfg.showsCursor = false
         cfg.ignoreShadowsSingleWindow = true
-        guard let img = try? await SCScreenshotManager.captureImage(
-            contentFilter: SCContentFilter(desktopIndependentWindow: w), configuration: cfg) else { continue }
-        thumbs.append(Thumb(id: w.windowID, title: w.title ?? "", image: img))
+        // ScreenCaptureKit refuses windows sitting in other fullscreen/tiled Spaces (error -3811); the deprecated CG call still gets them.
+        guard let img = (try? await SCScreenshotManager.captureImage(contentFilter: SCContentFilter(desktopIndependentWindow: w), configuration: cfg))
+                ?? CGWindowListCreateImage(.null, .optionIncludingWindow, w.windowID, [.boundsIgnoreFraming, .nominalResolution]) else { continue }
+        thumbs.append(Thumb(id: w.windowID, title: w.title ?? "", image: img, size: NSSize(width: w.frame.width * scale, height: w.frame.height * scale)))
     }
     return thumbs
 }
@@ -86,7 +88,6 @@ func capture(pid: pid_t) async -> [Thumb] {
 final class Controller: NSObject {
     let panel = NSPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
     var current: URL?
-    var pid: pid_t = 0
     var keep = CGRect.zero   // the mouse may roam here without closing the preview
     var gen = 0              // bumped on every hover change; stale async work checks it
     var lastMouse = NSPoint.zero
@@ -128,15 +129,15 @@ final class Controller: NSObject {
     }
 
     func show(_ hit: DockHit, gen g: Int) {
-        guard let bundleID = Bundle(url: hit.url)?.bundleIdentifier,
-              let app = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first else { return }
-        pid = app.processIdentifier
+        guard let bundleID = Bundle(url: hit.url)?.bundleIdentifier else { return }
+        let pids = Set(NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).map(\.processIdentifier))
+        guard !pids.isEmpty else { return }
         Task { @MainActor [self] in
             var shown = Set<CGWindowID>()
             while g == gen {   // live: re-capture ~5x/s until the hover ends
-                let thumbs = await capture(pid: app.processIdentifier)
+                let thumbs = await capture(pids: pids)
                 guard g == gen else { return }
-                if thumbs.isEmpty { if !shown.isEmpty { hide() }; return }
+                if thumbs.isEmpty { panel.orderOut(nil); return }   // nothing to show; also drops a previous app's stale panel
                 if Set(thumbs.map(\.id)) != shown {          // window set changed: rebuild
                     shown = Set(thumbs.map(\.id))
                     layout(thumbs, near: hit.rect)
@@ -153,9 +154,7 @@ final class Controller: NSObject {
         }
     }
 
-    func image(_ t: Thumb) -> NSImage {
-        NSImage(cgImage: t.image, size: NSSize(width: CGFloat(t.image.width) / 2, height: CGFloat(t.image.height) / 2))
-    }
+    func image(_ t: Thumb) -> NSImage { NSImage(cgImage: t.image, size: t.size) }
 
     func layout(_ thumbs: [Thumb], near item: CGRect) {
         stack = NSStackView()
@@ -208,7 +207,9 @@ final class Controller: NSObject {
     }
 
     @objc func click(_ sender: NSButton) {
-        raiseWindow(pid: pid, windowID: CGWindowID(sender.tag))
+        let id = CGWindowID(sender.tag)
+        let info = (CGWindowListCopyWindowInfo(.optionIncludingWindow, id) as? [[String: Any]])?.first
+        if let pid = info?[kCGWindowOwnerPID as String] as? pid_t { raiseWindow(pid: pid, windowID: id) }
         hide()
     }
 }

@@ -1,2 +1,4 @@
 Dockle.app/
 .claude/
+*.dmg
+dmg/

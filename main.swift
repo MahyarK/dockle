@@ -1,4 +1,4 @@
-// DockPreview — hover a Dock icon, get clickable window previews. Build with ./build.sh
+// Dockle — hover a Dock icon, get clickable window previews. Build with ./build.sh
 import Cocoa
 import ScreenCaptureKit
 
@@ -219,10 +219,10 @@ let app = NSApplication.shared
 app.setActivationPolicy(.accessory)
 AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary)
 CGRequestScreenCaptureAccess()
-NSLog("DockPreview start: accessibility=%d screenRecording=%d", AXIsProcessTrusted(), CGPreflightScreenCaptureAccess())
+NSLog("Dockle start: accessibility=%d screenRecording=%d", AXIsProcessTrusted(), CGPreflightScreenCaptureAccess())
 let status = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-status.button?.image = NSImage(systemSymbolName: "dock.rectangle", accessibilityDescription: "DockPreview")
+status.button?.image = NSImage(systemSymbolName: "dock.rectangle", accessibilityDescription: "Dockle")
 status.menu = NSMenu()
-status.menu?.addItem(withTitle: "Quit DockPreview", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+status.menu?.addItem(withTitle: "Quit Dockle", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
 let controller = Controller()
 app.run()

@@ -1,19 +1,19 @@
 #!/bin/sh
-# Builds DockPreview.app next to this script.  Run: ./build.sh && open DockPreview.app
+# Builds Dockle.app next to this script.  Run: ./build.sh && open Dockle.app
 # First launch asks for Accessibility (to read the Dock) and Screen Recording (to capture windows).
 # Grant both in System Settings > Privacy & Security, then relaunch the app.
 set -e
 cd "$(dirname "$0")"
-APP=DockPreview.app
+APP=Dockle.app
 mkdir -p "$APP/Contents/MacOS"
-swiftc -O -target "$(uname -m)-apple-macos14.0" -o "$APP/Contents/MacOS/DockPreview" main.swift
+swiftc -O -target "$(uname -m)-apple-macos14.0" -o "$APP/Contents/MacOS/Dockle" main.swift
 cat > "$APP/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
-<key>CFBundleIdentifier</key><string>com.mahyark.dockpreview</string>
-<key>CFBundleName</key><string>DockPreview</string>
-<key>CFBundleExecutable</key><string>DockPreview</string>
+<key>CFBundleIdentifier</key><string>com.mahyark.dockle</string>
+<key>CFBundleName</key><string>Dockle</string>
+<key>CFBundleExecutable</key><string>Dockle</string>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>LSMinimumSystemVersion</key><string>14.0</string>
 <key>LSUIElement</key><true/>

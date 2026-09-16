@@ -220,6 +220,25 @@ app.setActivationPolicy(.accessory)
 AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary)
 CGRequestScreenCaptureAccess()
 NSLog("Dockle start: accessibility=%d screenRecording=%d", AXIsProcessTrusted(), CGPreflightScreenCaptureAccess())
+if !AXIsProcessTrusted() || !CGPreflightScreenCaptureAccess() {   // nothing works until both are granted; say so instead of failing silently
+    let alert = NSAlert()
+    alert.messageText = "Dockle needs two permissions"
+    alert.informativeText = """
+        Accessibility (to read the Dock): \(AXIsProcessTrusted() ? "granted" : "missing")
+        Screen Recording (to capture windows): \(CGPreflightScreenCaptureAccess() ? "granted" : "missing")
+
+        Enable Dockle under both in System Settings > Privacy & Security, then relaunch Dockle.
+        """
+    alert.addButton(withTitle: "Open Accessibility")
+    alert.addButton(withTitle: "Open Screen Recording")
+    alert.addButton(withTitle: "Later")
+    NSApp.activate()
+    let r = alert.runModal()
+    if r != .alertThirdButtonReturn {
+        let pane = r == .alertFirstButtonReturn ? "Privacy_Accessibility" : "Privacy_ScreenCapture"
+        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?\(pane)")!)
+    }
+}
 let status = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 status.button?.image = NSImage(systemSymbolName: "dock.rectangle", accessibilityDescription: "Dockle")
 status.menu = NSMenu()

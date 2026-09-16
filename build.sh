@@ -5,7 +5,8 @@
 set -e
 cd "$(dirname "$0")"
 APP=Dockle.app
-mkdir -p "$APP/Contents/MacOS"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+cp assets/Dockle.icns "$APP/Contents/Resources/Dockle.icns"
 swiftc -O -target "$(uname -m)-apple-macos14.0" -o "$APP/Contents/MacOS/Dockle" main.swift
 cat > "$APP/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -14,6 +15,7 @@ cat > "$APP/Contents/Info.plist" <<EOF
 <key>CFBundleIdentifier</key><string>com.mahyark.dockle</string>
 <key>CFBundleName</key><string>Dockle</string>
 <key>CFBundleExecutable</key><string>Dockle</string>
+<key>CFBundleIconFile</key><string>Dockle</string>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>LSMinimumSystemVersion</key><string>14.0</string>
 <key>LSUIElement</key><true/>

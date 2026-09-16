@@ -9,7 +9,7 @@ Hover a Dock icon on macOS to see live thumbnails of that app's windows, click o
 open Dockle.app
 ```
 
-First launch asks for **Accessibility** (to read the Dock) and **Screen Recording** (to capture windows). Grant both in System Settings → Privacy & Security, then relaunch.
+On first launch a setup window asks for **Accessibility** (to read the Dock) and **Screen Recording** (to capture windows), with a button to the right Settings pane for each. It stays open until both are granted, then closes itself and relaunches Dockle.
 
 ## How it works
 

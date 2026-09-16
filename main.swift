@@ -214,6 +214,72 @@ final class Controller: NSObject {
     }
 }
 
+// MARK: - Setup window
+
+/// Shown on first launch. Stays up until both permissions are granted, then closes itself (and relaunches if needed).
+final class Setup: NSObject {
+    static let checks: [(name: String, why: String, pane: String, ok: () -> Bool)] = [
+        ("Accessibility", "to read the Dock", "Privacy_Accessibility", { AXIsProcessTrusted() }),
+        ("Screen Recording", "to capture windows", "Privacy_ScreenCapture", { CGPreflightScreenCaptureAccess() }),
+    ]
+    let window = NSWindow(contentRect: .zero, styleMask: [.titled], backing: .buffered, defer: false)   // no close button on purpose
+    let needsRelaunch = !CGPreflightScreenCaptureAccess()   // Screen Recording only takes effect after a relaunch
+    var labels: [NSTextField] = []
+
+    override init() {
+        super.init()
+        let stack = NSStackView()
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 14
+        stack.edgeInsets = NSEdgeInsets(top: 20, left: 20, bottom: 20, right: 20)
+        let intro = NSTextField(wrappingLabelWithString: "Dockle needs two permissions. Enable it under each in System Settings; this window closes by itself once both are granted.")
+        intro.preferredMaxLayoutWidth = 400
+        stack.addArrangedSubview(intro)
+        for (i, c) in Self.checks.enumerated() {
+            let row = NSStackView()
+            row.spacing = 12
+            let label = NSTextField(labelWithString: "")
+            labels.append(label)
+            let button = NSButton(title: "Open \(c.name) Settings", target: self, action: #selector(open(_:)))
+            button.tag = i
+            row.addArrangedSubview(label)
+            row.addArrangedSubview(button)
+            stack.addArrangedSubview(row)
+        }
+        refresh()
+        window.contentView = stack
+        window.setContentSize(stack.fittingSize)
+        window.title = "Set up Dockle"
+        window.level = .floating
+        window.center()
+        NSApp.activate()
+        window.makeKeyAndOrderFront(nil)
+        Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [self] t in
+            refresh()
+            if Self.checks.allSatisfy({ $0.ok() }) { t.invalidate(); done() }
+        }
+    }
+
+    func refresh() {
+        for (c, label) in zip(Self.checks, labels) { label.stringValue = "\(c.ok() ? "✅" : "❌")  \(c.name) (\(c.why))" }
+    }
+
+    @objc func open(_ sender: NSButton) {
+        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?\(Self.checks[sender.tag].pane)")!)
+    }
+
+    func done() {
+        window.orderOut(nil)
+        guard needsRelaunch else { return }
+        let relaunch = Process()
+        relaunch.executableURL = URL(fileURLWithPath: "/bin/sh")
+        relaunch.arguments = ["-c", "sleep 1; open '\(Bundle.main.bundlePath)'"]
+        try? relaunch.run()
+        NSApp.terminate(nil)
+    }
+}
+
 // MARK: - Main
 
 let app = NSApplication.shared
@@ -221,25 +287,7 @@ app.setActivationPolicy(.accessory)
 AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary)
 CGRequestScreenCaptureAccess()
 NSLog("Dockle start: accessibility=%d screenRecording=%d", AXIsProcessTrusted(), CGPreflightScreenCaptureAccess())
-if !AXIsProcessTrusted() || !CGPreflightScreenCaptureAccess() {   // nothing works until both are granted; say so instead of failing silently
-    let alert = NSAlert()
-    alert.messageText = "Dockle needs two permissions"
-    alert.informativeText = """
-        Accessibility (to read the Dock): \(AXIsProcessTrusted() ? "granted" : "missing")
-        Screen Recording (to capture windows): \(CGPreflightScreenCaptureAccess() ? "granted" : "missing")
-
-        Enable Dockle under both in System Settings > Privacy & Security, then relaunch Dockle.
-        """
-    alert.addButton(withTitle: "Open Accessibility")
-    alert.addButton(withTitle: "Open Screen Recording")
-    alert.addButton(withTitle: "Later")
-    NSApp.activate()
-    let r = alert.runModal()
-    if r != .alertThirdButtonReturn {
-        let pane = r == .alertFirstButtonReturn ? "Privacy_Accessibility" : "Privacy_ScreenCapture"
-        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?\(pane)")!)
-    }
-}
+let setup = Setup.checks.allSatisfy { $0.ok() } ? nil : Setup()   // first launch: guide until both permissions are granted
 let status = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 status.button?.image = NSImage(systemSymbolName: "dock.rectangle", accessibilityDescription: "Dockle")
 status.menu = NSMenu()
